@@ -19,12 +19,6 @@ const categoriaRoutes = require('./routes/categoriaRoutes');
 const bebidaRoutes = require('./routes/bebidaRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 
-// Diagnóstico de tipo de rutas
-console.log('mesaRoutes:', typeof mesaRoutes);           // Debe ser "function"
-console.log('categoriaRoutes:', typeof categoriaRoutes); // Debe ser "function"
-console.log('bebidaRoutes:', typeof bebidaRoutes);       // Debe ser "function"
-console.log('sessionRoutes:', typeof sessionRoutes);     // Debe ser "function"
-
 // Usar rutas
 app.use('/api/mesas', mesaRoutes);
 app.use('/api/categorias', categoriaRoutes);
