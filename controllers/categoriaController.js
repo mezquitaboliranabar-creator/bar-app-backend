@@ -4,9 +4,11 @@ const Categoria = require('../models/Categoria');
 const getCategorias = async (req, res) => {
   try {
     const categorias = await Categoria.find()
+      .select('nombre imagen') // Incluimos explícitamente el campo imagen
       .populate({
         path: 'bebidas',
-        options: { sort: { nombre: 1 } } // Ordena bebidas alfabéticamente
+        select: 'nombre precio', // Solo campos necesarios de bebida
+        options: { sort: { nombre: 1 } } // Ordena bebidas
       })
       .sort({ nombre: 1 }); // Ordena categorías alfabéticamente
 
@@ -20,21 +22,23 @@ const getCategorias = async (req, res) => {
   }
 };
 
-
 // Crear una nueva categoría
 const crearCategoria = async (req, res) => {
   try {
     const { nombre, imagen } = req.body;
+    if (!nombre || nombre.trim() === '') {
+      return res.status(400).json({ message: 'El nombre de la categoría es obligatorio' });
+    }
+
     const categoria = new Categoria({ nombre, imagen });
     await categoria.save();
     res.status(201).json(categoria);
   } catch (error) {
-    console.error(error);
+    console.error('❌ Error al crear categoría:', error);
     res.status(500).json({
-  message: 'Error al crear categoría',
-  error: error.message || 'Error desconocido'
-});
-
+      message: 'Error al crear categoría',
+      error: error.message || 'Error desconocido'
+    });
   }
 };
 
@@ -43,15 +47,17 @@ const actualizarCategoria = async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, imagen } = req.body;
-    const categoria = await Categoria.findByIdAndUpdate(
-      id,
-      { nombre, imagen },
-      { new: true }
-    );
+
+    const updateData = {};
+    if (nombre) updateData.nombre = nombre;
+    if (imagen) updateData.imagen = imagen;
+
+    const categoria = await Categoria.findByIdAndUpdate(id, updateData, { new: true });
     if (!categoria) return res.status(404).json({ message: 'Categoría no encontrada' });
+
     res.json(categoria);
   } catch (error) {
-    console.error(error);
+    console.error('❌ Error al actualizar categoría:', error);
     res.status(500).json({ message: 'Error al actualizar categoría', error });
   }
 };
@@ -64,7 +70,7 @@ const eliminarCategoria = async (req, res) => {
     if (!categoria) return res.status(404).json({ message: 'Categoría no encontrada' });
     res.json({ message: 'Categoría eliminada' });
   } catch (error) {
-    console.error(error);
+    console.error('❌ Error al eliminar categoría:', error);
     res.status(500).json({ message: 'Error al eliminar categoría', error });
   }
 };
