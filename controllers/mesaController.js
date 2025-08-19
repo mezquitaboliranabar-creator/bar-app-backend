@@ -17,7 +17,10 @@ const crearMesa = async (req, res) => {
       return res.status(400).json({ msg: "La mesa ya existe" });
     }
 
-    const urlMesa = `https://tu-dominio.com/mesa/${numero}`;
+    // URL del frontend en Vercel donde el cliente accederá a la mesa
+    const urlMesa = `https://bar-app-frontend-bar-client.vercel.app/session?mesa=${numero}`;
+
+    // Generar QR apuntando al frontend
     const qrCode = await QRCode.toDataURL(urlMesa);
 
     const nuevaMesa = await Mesa.create({
@@ -35,7 +38,7 @@ const crearMesa = async (req, res) => {
 // Obtener todas las mesas ordenadas por número
 const obtenerMesas = async (req, res) => {
   try {
-    const mesas = await Mesa.find().sort({ numero: 1 }); // 1 = ascendente, -1 = descendente
+    const mesas = await Mesa.find().sort({ numero: 1 }); // 1 = ascendente
     res.json(mesas);
     console.log(`✅ Mesas obtenidas y ordenadas por número: ${mesas.length}`);
   } catch (error) {
