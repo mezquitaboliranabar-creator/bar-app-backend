@@ -4,13 +4,14 @@ const Categoria = require('../models/Categoria');
 const getCategorias = async (req, res) => {
   try {
     const categorias = await Categoria.find()
-      .select('nombre imagen') // Incluimos explícitamente el campo imagen
+      .select('nombre imagen') // incluimos el campo imagen
       .populate({
         path: 'bebidas',
-        select: 'nombre precio', // Solo campos necesarios de bebida
-        options: { sort: { nombre: 1 } } // Ordena bebidas
+        select: 'nombre precio categoria', // incluimos categoria
+        populate: { path: 'categoria', select: '_id nombre' }, // <- populate categoría de la bebida
+        options: { sort: { nombre: 1 } }
       })
-      .sort({ nombre: 1 }); // Ordena categorías alfabéticamente
+      .sort({ nombre: 1 });
 
     res.json(categorias);
   } catch (error) {
