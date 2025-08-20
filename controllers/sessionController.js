@@ -1,79 +1,64 @@
-const Session = require('../models/Session');
-console.log("DEBUG Session:", Session);
+// controllers/sessionController.js
+const crypto = require("crypto");
+const Session = require("../models/Session");
+const Mesa = require("../models/Mesa");
 
-const { v4: uuidv4 } = require('uuid');
-
-const crearSession = async (req, res) => {
+const startOrGetSession = async (req, res) => {
   try {
-    console.log("📩 Body recibido:", req.body);
+    const { mesaId } = req.body;
+    if (!mesaId) return res.status(400).json({ ok: false, msg: "mesaId es obligatorio" });
 
-    const { mesa } = req.body;
-    if (!mesa) {
-      return res.status(400).json({ message: "El campo 'mesa' es obligatorio" });
-    }
+    const mesa = await Mesa.findById(mesaId);
+    if (!mesa) return res.status(404).json({ ok: false, msg: "Mesa no encontrada" });
 
-    // Crear nueva sesión con ID único
-    const nuevaSession = new Session({
-      mesa,
-      sessionId: uuidv4(),
-      activo: true
-    });
-
-    await nuevaSession.save();
-
-    res.status(201).json(nuevaSession);
-  } catch (error) {
-    console.error("❌ Error al crear sesión:", error.message);
-    res.status(500).json({ message: "Error al crear sesión", detalle: error.message });
-  }
-};
-
-
-// Obtener todas las sesiones
-const getSessions = async (req, res) => {
-  try {
-    const sessions = await Session.find();
-    res.json(sessions);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error al obtener sesiones', error });
-  }
-};
-
-// Cerrar y eliminar sesión
-const cerrarSession = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    console.info(`🔹 Solicitud de cierre para la sesión: ${id}`);
-
-    // Busca la sesión antes de borrar (para validación y log)
-    const session = await Session.findById(id);
+    let session = await Session.findOne({ mesa: mesaId, active: true });
     if (!session) {
-      console.warn(`⚠️ Sesión no encontrada: ${id}`);
-      return res.status(404).json({ message: 'Sesión no encontrada' });
+      session = await Session.create({
+        mesa: mesaId,
+        sessionId: crypto.randomUUID(),
+        active: true,
+        startedAt: new Date(),
+      });
     }
 
-    // Marca como cerrada (si quieres conservar un log antes de borrar)
-    session.activo = false;
-    session.fechaCierre = new Date();
+    return res.status(201).json({ ok: true, session });
+  } catch (error) {
+    if (error?.code === 11000) {
+      const again = await Session.findOne({ mesa: req.body.mesaId, active: true });
+      if (again) return res.json({ ok: true, session: again });
+    }
+    console.error("❌ Error al iniciar/obtener sesión:", error);
+    return res.status(500).json({ ok: false, msg: "Error al iniciar sesión", detalle: error.message });
+  }
+};
+
+const getActiveByMesa = async (req, res) => {
+  try {
+    const { mesaId } = req.params;
+    const session = await Session.findOne({ mesa: mesaId, active: true });
+    if (!session) return res.status(404).json({ ok: false, msg: "No hay sesión activa" });
+    return res.json({ ok: true, session });
+  } catch (error) {
+    console.error("❌ Error al obtener sesión:", error);
+    return res.status(500).json({ ok: false, msg: "Error al obtener sesión", detalle: error.message });
+  }
+};
+
+const closeSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await Session.findOne({ sessionId, active: true });
+    if (!session) return res.status(404).json({ ok: false, msg: "Sesión no encontrada o ya cerrada" });
+
+    session.active = false;
+    session.closedAt = new Date();
     await session.save();
 
-    // Elimina el documento
-    await Session.findByIdAndDelete(id);
-
-    console.log(`✅ Sesión ${id} cerrada y eliminada de la base de datos`);
-    res.json({ message: `Sesión ${id} cerrada y eliminada` });
-
+    return res.json({ ok: true, session });
   } catch (error) {
-    console.error(`❌ Error al cerrar y eliminar sesión ${req.params.id}:`, error);
-    res.status(500).json({ message: 'Error al cerrar y eliminar sesión', error: error.message });
+    console.error("❌ Error al cerrar sesión:", error);
+    return res.status(500).json({ ok: false, msg: "Error al cerrar sesión", detalle: error.message });
   }
 };
 
-
-module.exports = {
-  crearSession,
-  getSessions,
-  cerrarSession
-};
+module.exports = { startOrGetSession, getActiveByMesa, closeSession };

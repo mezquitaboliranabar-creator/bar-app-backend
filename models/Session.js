@@ -1,34 +1,20 @@
+// models/Session.js
 const mongoose = require("mongoose");
 
 const sessionSchema = new mongoose.Schema(
   {
-    mesa: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "Mesa", 
-      required: [true, "La mesa es obligatoria"], 
-      validate: {
-        validator: mongoose.Types.ObjectId.isValid,
-        message: "El ID de mesa no es válido"
-      }
-    },
-    sessionId: { 
-      type: String, 
-      required: [true, "El sessionId es obligatorio"], 
-      unique: true,
-      trim: true
-    },
-    activo: { 
-      type: Boolean, 
-      default: true 
-    }
+    mesa: { type: mongoose.Schema.Types.ObjectId, ref: "Mesa", required: true },
+    sessionId: { type: String, required: true, unique: true },
+    active: { type: Boolean, default: true },
+    startedAt: { type: Date, default: Date.now },
+    closedAt: { type: Date, default: null },
   },
-  { 
-    timestamps: true,
-    versionKey: false // opcional: limpia el _v
-  }
+  { timestamps: true }
 );
 
-// Índice para búsquedas rápidas por sessionId
-sessionSchema.index({ sessionId: 1 });
+sessionSchema.index(
+  { mesa: 1, active: 1 },
+  { unique: true, partialFilterExpression: { active: true } }
+);
 
-module.exports = mongoose.model("Session", sessionSchema);
+module.exports = mongoose.models.Session || mongoose.model("Session", sessionSchema);
