@@ -1,13 +1,15 @@
-const express = require('express');
+// routes/sessionRoutes.js
+const express = require("express");
 const router = express.Router();
+const { startOrGetSession, getActiveByMesa, closeSession } = require("../controllers/sessionController");
 
-// ✅ Importa todo el módulo como un objeto
-const sessionController = require('../controllers/sessionController');
-console.log('sessionController:', sessionController);
+// Crear o reutilizar sesión activa de una mesa
+router.post("/start", startOrGetSession);
 
-// ✅ Usa las funciones desde el objeto
-router.post('/', sessionController.crearSession);
-router.get('/', sessionController.getSessions);
-router.put('/:id/cerrar', sessionController.cerrarSession);
+// Obtener sesión activa por mesa
+router.get("/by-mesa/:mesaId", getActiveByMesa);
+
+// Cerrar sesión por sessionId
+router.post("/:sessionId/close", closeSession);
 
 module.exports = router;
