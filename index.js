@@ -7,21 +7,19 @@ dotenv.config();
 
 const app = express();
 
-// Body parser
+// ---------- Middlewares ----------
 app.use(express.json());
 
-// CORS (Vercel + local)
+// CORS solo con origen local (puedes añadir otros si lo necesitas)
 app.use(
   cors({
-    origin: [
-      process.env.FRONTEND_URL, // prod
-      'http://localhost:5000',  // dev local (opcional)
-    ].filter(Boolean),
-    // credentials: true, // si en el futuro manejas cookies
+    origin: ['http://localhost:3000'], // tu front local
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
-// Rutas
+// ---------- Rutas ----------
 const mesaRoutes = require('./routes/mesaRoutes');
 const categoriaRoutes = require('./routes/categoriaRoutes');
 const bebidaRoutes = require('./routes/bebidaRoutes');
@@ -32,20 +30,20 @@ app.use('/api/categorias', categoriaRoutes);
 app.use('/api/bebidas', bebidaRoutes);
 app.use('/api/sessions', sessionRoutes);
 
-// Conexión a MongoDB
+// Endpoint simple para comprobar que Render responde
+app.get('/health', (_req, res) => res.send('ok'));
+
+// ---------- Conexión a MongoDB ----------
 mongoose
   .connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    // dbName: process.env.MONGO_DB_NAME || 'bar_app', // opcional si tu URI no tiene DB
   })
   .then(() => {
     console.log('✅ Conectado a MongoDB Atlas');
-
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
-      console.log(`🚀 Servidor backend corriendo en el puerto ${PORT}`);
-      console.log('🌐 FRONTEND_URL permitido por CORS:', process.env.FRONTEND_URL);
+      console.log(`🚀 Backend en puerto ${PORT}`);
     });
   })
   .catch((err) => {
