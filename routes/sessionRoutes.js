@@ -1,25 +1,34 @@
 const express = require("express");
 const router = express.Router();
-const ctrl = require("../controllers/promocionController");
 
-// (opcional mientras pruebas)
-console.log("[PROMOS ROUTES] cargado:", __filename);
-router.stack = router.stack || [];
-// imprime las rutas cargadas
-process.nextTick(() => {
-  router.stack.forEach(l => {
-    if (l.route) console.log("[PROMOS ROUTE]", Object.keys(l.route.methods), l.route.path);
-  });
-});
+let ctrl;
+try {
+  ctrl = require("../controllers/sessionController"); // 👈 path/case exactos
+  console.log("DEBUG sessionController keys:", Object.keys(ctrl));
+} catch (e) {
+  console.error("❌ No se pudo cargar sessionController:", e);
+  throw e;
+}
 
-// RUTAS RELATIVAS (¡sin /api/promociones aquí!)
-router.get("/", ctrl.listarPromociones);
-router.get("/:id", ctrl.obtenerPromocion);
-router.post("/", ctrl.crearPromocion);
-router.put("/:id", ctrl.actualizarPromocion);
-router.delete("/:id", ctrl.eliminarPromocion);
+const { startOrGetSession, getActiveByMesa, closeSession } = ctrl;
 
-// (sanity ping temporal)
-// router.get("/_ping", (_req, res) => res.json({ ok: true }));
+if (typeof startOrGetSession !== "function") {
+  throw new Error("startOrGetSession está undefined. Revisa controllers/sessionController.js (exports/nombres/ruta).");
+}
+if (typeof getActiveByMesa !== "function") {
+  throw new Error("getActiveByMesa está undefined. Revisa controllers/sessionController.js.");
+}
+if (typeof closeSession !== "function") {
+  throw new Error("closeSession está undefined. Revisa controllers/sessionController.js.");
+}
 
-module.exports = router; // <- asegúrate de exportar el router
+// Crear o reutilizar sesión activa de una mesa
+router.post("/start", startOrGetSession);
+
+// Obtener sesión activa por mesa
+router.get("/by-mesa/:mesaId", getActiveByMesa);
+
+// Cerrar sesión por sessionId
+router.post("/:sessionId/close", closeSession);
+
+module.exports = router;
