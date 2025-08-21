@@ -1,15 +1,25 @@
-// routes/sessionRoutes.js
 const express = require("express");
 const router = express.Router();
-const { startOrGetSession, getActiveByMesa, closeSession } = require("../controllers/sessionController");
+const ctrl = require("../controllers/promocionController");
 
-// Crear o reutilizar sesión activa de una mesa
-router.post("/start", startOrGetSession);
+// (opcional mientras pruebas)
+console.log("[PROMOS ROUTES] cargado:", __filename);
+router.stack = router.stack || [];
+// imprime las rutas cargadas
+process.nextTick(() => {
+  router.stack.forEach(l => {
+    if (l.route) console.log("[PROMOS ROUTE]", Object.keys(l.route.methods), l.route.path);
+  });
+});
 
-// Obtener sesión activa por mesa
-router.get("/by-mesa/:mesaId", getActiveByMesa);
+// RUTAS RELATIVAS (¡sin /api/promociones aquí!)
+router.get("/", ctrl.listarPromociones);
+router.get("/:id", ctrl.obtenerPromocion);
+router.post("/", ctrl.crearPromocion);
+router.put("/:id", ctrl.actualizarPromocion);
+router.delete("/:id", ctrl.eliminarPromocion);
 
-// Cerrar sesión por sessionId
-router.post("/:sessionId/close", closeSession);
+// (sanity ping temporal)
+// router.get("/_ping", (_req, res) => res.json({ ok: true }));
 
-module.exports = router;
+module.exports = router; // <- asegúrate de exportar el router

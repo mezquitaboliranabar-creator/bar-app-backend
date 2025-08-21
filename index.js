@@ -43,11 +43,13 @@ const mesaRoutes = require('./routes/mesaRoutes');
 const categoriaRoutes = require('./routes/categoriaRoutes');
 const bebidaRoutes = require('./routes/bebidaRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
+const promocionesRoutes = require('./routes/promocionesRoutes');
 
 app.use('/api/mesas', mesaRoutes);
 app.use('/api/categorias', categoriaRoutes);
 app.use('/api/bebidas', bebidaRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/promociones', promocionesRoutes);
 
 // Healthcheck
 app.get('/health', (_req, res) => res.send('ok'));

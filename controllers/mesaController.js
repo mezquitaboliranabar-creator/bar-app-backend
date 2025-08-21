@@ -1,4 +1,5 @@
 // controllers/mesaController.js
+const mongoose = require("mongoose");
 const Mesa = require("../models/Mesa");
 const QRCode = require("qrcode");
 
@@ -20,7 +21,7 @@ const crearMesa = async (req, res) => {
     if (existe) return res.status(400).json({ ok: false, msg: "La mesa ya existe" });
 
     // 1) Crear la mesa
-    const mesa = await Mesa.create({ numero, estado: "libre" }); // estado opcional si tu schema no tiene default
+    const mesa = await Mesa.create({ numero, estado: "libre" }); // si el schema no tiene default
 
     // 2) Construir URL del front /mesa/:id (usa _id, NO numero)
     if (!FRONT_BASE) {
@@ -36,7 +37,7 @@ const crearMesa = async (req, res) => {
       await mesa.save();
     } catch (qrErr) {
       console.error("❌ Error generando QR:", qrErr?.message || qrErr);
-      // Si prefieres hacer fallar la creación si no hay QR:
+      
       // return res.status(500).json({ ok: false, msg: "No se pudo generar el QR" });
     }
 
@@ -44,7 +45,7 @@ const crearMesa = async (req, res) => {
       ok: true,
       mensaje: "Mesa creada",
       mesa,
-      urlMesa, // <- para verificar qué quedó en el QR
+      urlMesa, // para verificar qué quedó en el QR
     });
   } catch (error) {
     console.error("❌ Error al crear mesa:", error);
@@ -65,8 +66,15 @@ const obtenerMesas = async (_req, res) => {
 const obtenerMesaPorId = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validación de ObjectId para evitar 500 con ids inválidos
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ ok: false, msg: "ID inválido" });
+    }
+
     const mesa = await Mesa.findById(id);
     if (!mesa) return res.status(404).json({ ok: false, msg: "Mesa no encontrada" });
+
     return res.json(mesa); // el frontend espera objeto plano
   } catch (error) {
     console.error("❌ Error al obtener la mesa por id:", error);
