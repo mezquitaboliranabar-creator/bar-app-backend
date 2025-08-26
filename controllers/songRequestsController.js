@@ -4,12 +4,16 @@ const SongRequest = require("../models/SongRequest");
 const Settings = require("../models/Settings");
 
 /* *Config (vía ENV, con defaults seguros) */
-const MAX_PER_SESSION = parseInt(process.env.MUSIC_MAX_PER_SESSION || "5", 10);                 // cupo por sesión
-const MAX_PER_HOUR = parseInt(process.env.MUSIC_MAX_PER_SESSION_PER_HOUR || "3", 10);          // rate limit por hora
-const COOLDOWN_SECONDS = parseInt(process.env.MUSIC_COOLDOWN_SECONDS || "120", 10);            // enfriamiento entre requests por sesión
-const ANTI_DUP_WINDOW_MIN = parseInt(process.env.MUSIC_ANTI_DUP_WINDOW_MIN || "30", 10);       // ventana anti-duplicados (min)
-const MAX_QUEUE_SIZE = parseInt(process.env.MUSIC_MAX_QUEUE_SIZE || "30", 10);                 // tope global de cola
-const BASE_URL = process.env.API_URL || "http://localhost:5000";                                // para llamar a tu propio backend
+const MAX_PER_SESSION = parseInt(process.env.MUSIC_MAX_PER_SESSION || "5", 10);
+const MAX_PER_HOUR = parseInt(process.env.MUSIC_MAX_PER_SESSION_PER_HOUR || "3", 10);
+const COOLDOWN_SECONDS = parseInt(process.env.MUSIC_COOLDOWN_SECONDS || "120", 10);
+const ANTI_DUP_WINDOW_MIN = parseInt(process.env.MUSIC_ANTI_DUP_WINDOW_MIN || "30", 10);
+const MAX_QUEUE_SIZE = parseInt(process.env.MUSIC_MAX_QUEUE_SIZE || "30", 10);
+const BASE_URL = process.env.API_URL || "http://localhost:5000";
+
+// ==== NUEVO: políticas de limpieza (opcionales) ====
+const TTL_MIN = parseInt(process.env.MUSIC_REQUEST_TTL_MIN || "0", 10); // 0 = desactivado
+const DELETE_DONE_IMMEDIATELY = String(process.env.MUSIC_DELETE_DONE_IMMEDIATELY || "false").toLowerCase() === "true";
 
 // Estados permitidos de una solicitud
 const STATUS = {
@@ -23,7 +27,6 @@ const STATUS = {
 const ACTIVE_IN_QUEUE = [STATUS.QUEUED, STATUS.APPROVED, STATUS.PLAYING];
 
 /**  Helpers */
-
 function normalizeTrackUri(input) {
   if (!input || typeof input !== "string") return null;
   const s = input.trim();
@@ -197,11 +200,8 @@ module.exports = {
           { uri: trackUri, deviceId: settings.preferredDeviceId },
           { headers: { "Content-Type": "application/json" } }
         );
-        // Si quieres marcar algo adicional en el doc cuando sí se encola, puedes actualizar aquí.
-        // await SongRequest.findByIdAndUpdate(doc._id, { queuedAt: new Date() });
         return res.status(201).json({ ok: true, msg: "Añadida a la cola del bar", request: doc });
       } catch (e) {
-        // Si falla (sin device activo/token), dejamos la solicitud creada y avisamos
         console.error("[crearSolicitud] queue failed:", e?.response?.data || e.message);
         return res.status(202).json({
           ok: true,
@@ -217,7 +217,6 @@ module.exports = {
 
   /**
    * GET /api/music/requests
-   * Query: status?, sessionId?, mesaId?, limit?, page?, sort? (createdAt|votes ASC/DESC)
    */
   async listarSolicitudes(req, res) {
     try {
@@ -227,7 +226,7 @@ module.exports = {
         mesaId,
         limit = 50,
         page = 1,
-        sort = "createdAt:asc", // opciones: createdAt:asc|desc, votes:asc|desc
+        sort = "createdAt:asc",
       } = req.query;
 
       const filter = {};
@@ -265,17 +264,32 @@ module.exports = {
       const { id } = req.params;
       const { status, reason } = req.body || {};
 
+      // Acepta mayúsculas/minúsculas desde el front
+      const statusLower = String(status).toLowerCase();
       const allowed = new Set([STATUS.APPROVED, STATUS.REJECTED, STATUS.PLAYING, STATUS.DONE]);
-      if (!allowed.has(status)) {
+      if (!allowed.has(statusLower)) {
         return res.status(400).json({
           ok: false,
           msg: `Estado inválido. Usa uno de: ${Array.from(allowed).join(", ")}`,
         });
       }
 
-      const update = { status };
-      if (status === STATUS.PLAYING) update.playedAt = new Date();
-      if (status === STATUS.REJECTED) update.rejectedReason = reason ? String(reason).trim() : "—";
+      // Borrado inmediato opcional
+      if (statusLower === STATUS.DONE && DELETE_DONE_IMMEDIATELY) {
+        await SongRequest.findByIdAndDelete(id);
+        return res.json({ ok: true, deleted: true });
+      }
+
+      // Update normal (+ TTL opcional)
+      const update = { status: statusLower };
+      if (statusLower === STATUS.PLAYING) update.playedAt = new Date();
+      if (statusLower === STATUS.REJECTED) update.rejectedReason = reason ? String(reason).trim() : "—";
+      if (statusLower === STATUS.DONE) {
+        update.doneAt = new Date();
+        if (TTL_MIN > 0) {
+          update.expiresAt = new Date(Date.now() + TTL_MIN * 60 * 1000);
+        }
+      }
 
       const doc = await SongRequest.findByIdAndUpdate(id, update, { new: true });
       if (!doc) return res.status(404).json({ ok: false, msg: "Solicitud no encontrada" });

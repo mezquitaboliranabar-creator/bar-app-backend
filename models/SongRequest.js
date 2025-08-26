@@ -62,6 +62,18 @@ const SongRequestSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+
+    // ==== NUEVO ====
+    doneAt: {
+      type: Date,
+      default: null,
+    },
+    // Si se setea, Mongo borrará el documento automáticamente cuando llegue esta fecha
+    expiresAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true, // createdAt, updatedAt
@@ -75,5 +87,9 @@ SongRequestSchema.index({ trackUri: 1, createdAt: -1 });
 SongRequestSchema.index({ status: 1, createdAt: 1 });
 // (opcional) para listados por mesa
 SongRequestSchema.index({ "requestedBy.mesaId": 1, createdAt: -1 });
+
+// TTL: cuando 'expiresAt' tenga fecha, borra el doc (delay ~60s)
+// (Si no seteas expiresAt, NO borra nada)
+SongRequestSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model("SongRequest", SongRequestSchema);
