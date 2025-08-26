@@ -48,6 +48,7 @@ const songRequestsRoutes = require('./routes/songRequestsRoutes');
 const musicSearchRoutes = require('./routes/musicSearchRoutes');
 const spotifyAuthRoutes = require("./routes/spotifyAuthRoutes");
 const playbackRoutes = require('./routes/spotifyPlaybackRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 app.use('/api/mesas', mesaRoutes);
 app.use('/api/categorias', categoriaRoutes);
@@ -58,6 +59,7 @@ app.use('/api/music/requests', songRequestsRoutes);
 app.use('/api/music/search', musicSearchRoutes);
 app.use("/api/music/spotify", spotifyAuthRoutes);
 app.use('/api/music/playback', playbackRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Healthcheck
 app.get('/health', (_req, res) => res.send('ok'));

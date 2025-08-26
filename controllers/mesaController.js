@@ -1,4 +1,3 @@
-// controllers/mesaController.js
 const mongoose = require("mongoose");
 const Mesa = require("../models/Mesa");
 const QRCode = require("qrcode");

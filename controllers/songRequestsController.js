@@ -1,13 +1,15 @@
-// controllers/songRequestsController.js
+const axios = require("axios");
 const Session = require("../models/Session");
 const SongRequest = require("../models/SongRequest");
+const Settings = require("../models/Settings");
 
-/** ===== Config (vía ENV, con defaults seguros) ===== */
+/* *Config (vía ENV, con defaults seguros) */
 const MAX_PER_SESSION = parseInt(process.env.MUSIC_MAX_PER_SESSION || "5", 10);                 // cupo por sesión
 const MAX_PER_HOUR = parseInt(process.env.MUSIC_MAX_PER_SESSION_PER_HOUR || "3", 10);          // rate limit por hora
 const COOLDOWN_SECONDS = parseInt(process.env.MUSIC_COOLDOWN_SECONDS || "120", 10);            // enfriamiento entre requests por sesión
 const ANTI_DUP_WINDOW_MIN = parseInt(process.env.MUSIC_ANTI_DUP_WINDOW_MIN || "30", 10);       // ventana anti-duplicados (min)
 const MAX_QUEUE_SIZE = parseInt(process.env.MUSIC_MAX_QUEUE_SIZE || "30", 10);                 // tope global de cola
+const BASE_URL = process.env.API_URL || "http://localhost:5000";                                // para llamar a tu propio backend
 
 // Estados permitidos de una solicitud
 const STATUS = {
@@ -20,30 +22,23 @@ const STATUS = {
 
 const ACTIVE_IN_QUEUE = [STATUS.QUEUED, STATUS.APPROVED, STATUS.PLAYING];
 
-/** ===== Helpers ===== */
-
+/**  Helpers */
 
 function normalizeTrackUri(input) {
   if (!input || typeof input !== "string") return null;
-
   const s = input.trim();
 
-  // Ya es URI
   if (s.startsWith("spotify:track:")) return s;
 
-  // URL de Spotify
   if (/open\.spotify\.com\/track\//i.test(s)) {
     try {
       const url = new URL(s);
       const parts = url.pathname.split("/").filter(Boolean); // ["track", "<id>"]
       const id = parts[1];
       return id ? `spotify:track:${id}` : null;
-    } catch {
-      // no es URL válida
-    }
+    } catch {}
   }
 
-  // Solo ID (22 chars típicamente)
   if (/^[A-Za-z0-9]+$/.test(s)) {
     return `spotify:track:${s}`;
   }
@@ -65,7 +60,6 @@ async function findActiveSession({ sessionId, mesaId }) {
 
 /** ===== Controller ===== */
 module.exports = {
-  
   async crearSolicitud(req, res) {
     try {
       const {
@@ -164,7 +158,7 @@ module.exports = {
         "requestedBy.sessionId": session.sessionId,
         trackUri,
         createdAt: { $gte: dupSince },
-        status: { $nin: [STATUS.REJECTED, STATUS.DONE] }, // si fue rechazada/done, permitimos luego de la ventana
+        status: { $nin: [STATUS.REJECTED, STATUS.DONE] },
       });
       if (dupExists) {
         return res.status(409).json({
@@ -173,7 +167,16 @@ module.exports = {
         });
       }
 
-      // 8) Crear solicitud
+      // 8) Verificar que exista un device preferido (PC del bar)
+      const settings = await Settings.findOne({});
+      if (!settings?.preferredDeviceId) {
+        return res.status(409).json({
+          ok: false,
+          msg: "No hay dispositivo preferido configurado en el PC del bar. Selecciónalo en /api/settings/device.",
+        });
+      }
+
+      // 9) Crear solicitud en DB
       const doc = await SongRequest.create({
         trackUri,
         title: String(title).trim(),
@@ -181,13 +184,31 @@ module.exports = {
         imageUrl: imageUrl ? String(imageUrl).trim() : undefined,
         requestedBy: {
           sessionId: session.sessionId,
-          mesaId: session.mesa, // trazamos la mesa automáticamente
+          mesaId: session.mesa,
         },
         status: STATUS.QUEUED,
         votes: 0,
       });
 
-      return res.status(201).json({ ok: true, request: doc });
+      // 10) Intentar encolar inmediatamente en Spotify
+      try {
+        await axios.post(
+          `${BASE_URL}/api/music/playback/queue`,
+          { uri: trackUri, deviceId: settings.preferredDeviceId },
+          { headers: { "Content-Type": "application/json" } }
+        );
+        // Si quieres marcar algo adicional en el doc cuando sí se encola, puedes actualizar aquí.
+        // await SongRequest.findByIdAndUpdate(doc._id, { queuedAt: new Date() });
+        return res.status(201).json({ ok: true, msg: "Añadida a la cola del bar", request: doc });
+      } catch (e) {
+        // Si falla (sin device activo/token), dejamos la solicitud creada y avisamos
+        console.error("[crearSolicitud] queue failed:", e?.response?.data || e.message);
+        return res.status(202).json({
+          ok: true,
+          msg: "Solicitud guardada, pero el reproductor no está activo. Actívalo en el PC del bar y reintenta.",
+          request: doc,
+        });
+      }
     } catch (err) {
       console.error("[crearSolicitud] Error:", err?.message || err);
       return res.status(500).json({ ok: false, msg: "Error al crear solicitud" });
@@ -239,7 +260,6 @@ module.exports = {
     }
   },
 
-  
   async actualizarEstado(req, res) {
     try {
       const { id } = req.params;
