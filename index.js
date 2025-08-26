@@ -44,12 +44,20 @@ const categoriaRoutes = require('./routes/categoriaRoutes');
 const bebidaRoutes = require('./routes/bebidaRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const promocionesRoutes = require('./routes/promocionesRoutes');
+const songRequestsRoutes = require('./routes/songRequestsRoutes');
+const musicSearchRoutes = require('./routes/musicSearchRoutes');
+const spotifyAuthRoutes = require("./routes/spotifyAuthRoutes");
+const playbackRoutes = require('./routes/spotifyPlaybackRoutes');
 
 app.use('/api/mesas', mesaRoutes);
 app.use('/api/categorias', categoriaRoutes);
 app.use('/api/bebidas', bebidaRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/promociones', promocionesRoutes);
+app.use('/api/music/requests', songRequestsRoutes);
+app.use('/api/music/search', musicSearchRoutes);
+app.use("/api/music/spotify", spotifyAuthRoutes);
+app.use('/api/music/playback', playbackRoutes);
 
 // Healthcheck
 app.get('/health', (_req, res) => res.send('ok'));
