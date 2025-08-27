@@ -1,5 +1,7 @@
+// controllers/mesaController.js
 const mongoose = require("mongoose");
 const Mesa = require("../models/Mesa");
+const Session = require("../models/Session"); // ⬅️ NUEVO: para cerrar sesiones activas
 const QRCode = require("qrcode");
 
 const FRONT_BASE = (process.env.FRONTEND_URL || "").replace(/\/+$/, ""); // sin trailing slash
@@ -36,8 +38,7 @@ const crearMesa = async (req, res) => {
       await mesa.save();
     } catch (qrErr) {
       console.error("❌ Error generando QR:", qrErr?.message || qrErr);
-      
-      // return res.status(500).json({ ok: false, msg: "No se pudo generar el QR" });
+      // Opcional: podrías responder 201 igualmente; el QR se puede regenerar luego
     }
 
     return res.status(201).json({
@@ -81,4 +82,43 @@ const obtenerMesaPorId = async (req, res) => {
   }
 };
 
-module.exports = { crearMesa, obtenerMesas, obtenerMesaPorId };
+/* ========= NUEVO: cierre manual por mesa (idempotente) =========
+   - Cierra cualquier sesión activa ligada a la mesa (closedReason="manual")
+   - Deja la mesa en estado "libre"
+   - No toca ningún dato de QR
+*/
+const cerrarMesaManual = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ ok: false, msg: "ID inválido" });
+    }
+
+    const mesa = await Mesa.findById(id);
+    if (!mesa) return res.status(404).json({ ok: false, msg: "Mesa no encontrada" });
+
+    // Cierra todas las sesiones activas de la mesa (si las hay)
+    const result = await Session.updateMany(
+      { mesa: id, active: true },
+      { $set: { active: false, closedAt: new Date(), closedReason: "manual" } }
+    );
+
+    // Colocar mesa en "libre" (idempotente)
+    if (mesa.estado !== "libre") {
+      mesa.estado = "libre";
+      await mesa.save();
+    }
+
+    return res.json({
+      ok: true,
+      closedCount: result?.modifiedCount ?? 0,
+      mesa,
+    });
+  } catch (error) {
+    console.error("❌ Error al cerrar mesa:", error);
+    return res.status(500).json({ ok: false, msg: "Error al cerrar mesa", detalle: error.message });
+  }
+};
+
+module.exports = { crearMesa, obtenerMesas, obtenerMesaPorId, cerrarMesaManual };

@@ -9,6 +9,24 @@ const ABSOLUTE_MINUTES = Number(process.env.SESSION_ABSOLUTE_MAX_MINUTES || 0); 
 const nowMs = () => Date.now();
 const ms = (m) => m * 60 * 1000;
 
+/* ==== NUEVO: helpers para sincronizar estado de la mesa ==== */
+async function setMesaEstado(mesaId, estado) {
+  try {
+    await Mesa.findByIdAndUpdate(mesaId, { estado }, { new: false });
+  } catch (e) {
+    console.warn("⚠️ No se pudo actualizar estado de mesa:", mesaId, e?.message);
+  }
+}
+async function setMesaLibreSiNoHaySesiones(mesaId) {
+  try {
+    const stillActive = await Session.exists({ mesa: mesaId, active: true });
+    if (!stillActive) await setMesaEstado(mesaId, "libre");
+  } catch (e) {
+    console.warn("⚠️ No se pudo verificar sesiones activas para mesa:", mesaId, e?.message);
+  }
+}
+/* ========================================================== */
+
 function isExpiredByIdle(session) {
   const last = new Date(session.lastActivityAt || session.startedAt || Date.now()).getTime();
   return nowMs() - last > ms(IDLE_MINUTES);
@@ -23,6 +41,8 @@ async function closeAndSave(session, reason) {
   session.closedAt = new Date();
   session.closedReason = reason || null;
   await session.save();
+  // ✅ al cerrar/expirar, si no quedan sesiones activas, dejar mesa en "libre"
+  await setMesaLibreSiNoHaySesiones(session.mesa);
 }
 
 // Crea o reutiliza sesión (con expiración perezosa)
@@ -48,6 +68,8 @@ const startOrGetSession = async (req, res) => {
         // viva → refresca actividad y devuelve
         session.lastActivityAt = new Date();
         await session.save();
+        // ✅ asegura estado "ocupada" mientras haya sesión activa
+        await setMesaEstado(mesaId, "ocupada");
         return res.status(201).json({ ok: true, session });
       }
     }
@@ -60,6 +82,8 @@ const startOrGetSession = async (req, res) => {
         startedAt: new Date(),
         lastActivityAt: new Date(),
       });
+      // ✅ nueva sesión → mesa ocupada
+      await setMesaEstado(mesaId, "ocupada");
     }
 
     return res.status(201).json({ ok: true, session });
@@ -91,6 +115,8 @@ const getActiveByMesa = async (req, res) => {
     // refresca actividad si quieres que 'get' también cuente como actividad:
     session.lastActivityAt = new Date();
     await session.save();
+    // ✅ mientras esté viva, marcar mesa como ocupada
+    await setMesaEstado(mesaId, "ocupada");
 
     return res.json({ ok: true, session });
   } catch (error) {
@@ -134,6 +160,8 @@ const ping = async (req, res) => {
 
     session.lastActivityAt = new Date();
     await session.save();
+    // ✅ ping exitoso → mantener mesa ocupada
+    await setMesaEstado(session.mesa, "ocupada");
 
     const until = new Date(session.lastActivityAt).getTime() + ms(IDLE_MINUTES);
     return res.json({ ok: true, until });
