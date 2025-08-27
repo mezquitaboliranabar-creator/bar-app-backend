@@ -11,8 +11,8 @@ const ANTI_DUP_WINDOW_MIN = parseInt(process.env.MUSIC_ANTI_DUP_WINDOW_MIN || "3
 const MAX_QUEUE_SIZE = parseInt(process.env.MUSIC_MAX_QUEUE_SIZE || "30", 10);
 const BASE_URL = process.env.API_URL || "http://localhost:5000";
 
-// ==== NUEVO: políticas de limpieza (opcionales) ====
-const TTL_MIN = parseInt(process.env.MUSIC_REQUEST_TTL_MIN || "0", 10); // 0 = desactivado
+// políticas de limpieza (opcionales)
+const TTL_MIN = parseInt(process.env.MUSIC_REQUEST_TTL_MIN || "0", 10); 
 const DELETE_DONE_IMMEDIATELY = String(process.env.MUSIC_DELETE_DONE_IMMEDIATELY || "false").toLowerCase() === "true";
 
 // Estados permitidos de una solicitud
@@ -61,7 +61,7 @@ async function findActiveSession({ sessionId, mesaId }) {
   return null;
 }
 
-/** ===== Controller ===== */
+/*Controller*/
 module.exports = {
   async crearSolicitud(req, res) {
     try {
@@ -76,7 +76,7 @@ module.exports = {
         imageUrl,
       } = req.body || {};
 
-      // 1) Normalizar trackUri
+      // Normalizar trackUri
       const trackUri =
         normalizeTrackUri(rawTrackUri) ||
         normalizeTrackUri(trackUrl) ||
@@ -94,7 +94,7 @@ module.exports = {
           .json({ ok: false, msg: "'title' y 'artist' son obligatorios" });
       }
 
-      // 2) Sesión activa requerida
+      // Sesión activa requerida
       const session = await findActiveSession({ sessionId, mesaId });
       if (!session) {
         return res
@@ -102,7 +102,7 @@ module.exports = {
           .json({ ok: false, msg: "No hay sesión activa para esta mesa/sesión" });
       }
 
-      // 3) Tope global de cola (queued+approved)
+      //Tope global de cola (queued+approved)
       const globalQueued = await SongRequest.countDocuments({
         status: { $in: [STATUS.QUEUED, STATUS.APPROVED] },
       });
@@ -112,7 +112,7 @@ module.exports = {
           .json({ ok: false, msg: "La cola está llena. Intenta más tarde." });
       }
 
-      // 4) Cupo por sesión (queued/approved/playing)
+      // Cupo por sesión (queued/approved/playing)
       const activeCount = await SongRequest.countDocuments({
         "requestedBy.sessionId": session.sessionId,
         status: { $in: ACTIVE_IN_QUEUE },
@@ -124,7 +124,7 @@ module.exports = {
         });
       }
 
-      // 5) Rate limit por hora
+      // Rate limit por hora
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
       const hourCount = await SongRequest.countDocuments({
         "requestedBy.sessionId": session.sessionId,
@@ -137,7 +137,7 @@ module.exports = {
         });
       }
 
-      // 6) Cooldown
+      // Cooldown
       const lastReq = await SongRequest.findOne({
         "requestedBy.sessionId": session.sessionId,
       })
@@ -155,7 +155,7 @@ module.exports = {
         }
       }
 
-      // 7) Anti-duplicados (misma sesión, misma canción) por ventana
+      // Anti-duplicados (misma sesión, misma canción) por ventana
       const dupSince = new Date(Date.now() - ANTI_DUP_WINDOW_MIN * 60 * 1000);
       const dupExists = await SongRequest.exists({
         "requestedBy.sessionId": session.sessionId,
@@ -170,7 +170,7 @@ module.exports = {
         });
       }
 
-      // 8) Verificar que exista un device preferido (PC del bar)
+      // Verificar que exista un device preferido (PC del bar)
       const settings = await Settings.findOne({});
       if (!settings?.preferredDeviceId) {
         return res.status(409).json({
@@ -179,7 +179,7 @@ module.exports = {
         });
       }
 
-      // 9) Crear solicitud en DB
+      // Crear solicitud en DB
       const doc = await SongRequest.create({
         trackUri,
         title: String(title).trim(),
@@ -193,7 +193,7 @@ module.exports = {
         votes: 0,
       });
 
-      // 10) Intentar encolar inmediatamente en Spotify
+      // Intentar encolar inmediatamente en Spotify
       try {
         await axios.post(
           `${BASE_URL}/api/music/playback/queue`,
@@ -247,7 +247,7 @@ module.exports = {
       const pageNum = Math.max(1, parseInt(page, 10) || 1);
       const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
 
-      // ✅ POBLAR MESA para tener numero/nombre en la respuesta
+      // POBLAR MESA para tener numero/nombre en la respuesta
       const query = SongRequest.find(filter)
         .sort(sortObj)
         .limit(limitNum)

@@ -90,6 +90,6 @@ SongRequestSchema.index({ "requestedBy.mesaId": 1, createdAt: -1 });
 
 // TTL: cuando 'expiresAt' tenga fecha, borra el doc (delay ~60s)
 // (Si no seteas expiresAt, NO borra nada)
-SongRequestSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 
 module.exports = mongoose.model("SongRequest", SongRequestSchema);
