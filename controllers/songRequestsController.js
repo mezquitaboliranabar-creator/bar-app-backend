@@ -247,8 +247,15 @@ module.exports = {
       const pageNum = Math.max(1, parseInt(page, 10) || 1);
       const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
 
+      // ✅ POBLAR MESA para tener numero/nombre en la respuesta
+      const query = SongRequest.find(filter)
+        .sort(sortObj)
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum)
+        .populate({ path: "requestedBy.mesaId", select: "numero nombre name" });
+
       const [items, total] = await Promise.all([
-        SongRequest.find(filter).sort(sortObj).limit(limitNum).skip((pageNum - 1) * limitNum),
+        query,
         SongRequest.countDocuments(filter),
       ]);
 
