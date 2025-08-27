@@ -82,6 +82,12 @@ mongoose
     app.listen(PORT, () => {
       console.log(`🚀 Backend en puerto ${PORT}`);
       console.log('🌐 CORS orígenes permitidos:', allowedOrigins.join(', ') || '(ninguno)');
+
+      try {
+    require('./jobs/spotifyAutoCleanup').start();
+  } catch (e) {
+    console.error("No se pudo iniciar spotifyAutoCleanup:", e?.message || e);
+  }
     });
   })
   .catch((err) => {
